@@ -8,6 +8,7 @@ namespace JWTAuthServer.Configuration
         public float ExpiresInMinutes { get; set; } = 0.0f;
         public string RefreshSecret { get; set; } = string.Empty;
         public float RefreshExpiresInMinutes { get; set; } = 0.0f;
+        public string KeyVaultUrl { get; set; } = string.Empty;
 
     }
 }
