@@ -15,7 +15,7 @@ namespace JWTAuthServer.Services.UserRepository
 
         public Task<User> GetByEmailAsync(string email)
         {
-            return Task.FromResult(_users.FirstOrDefault(u => u.EmailAddress == email));
+            return Task.FromResult(_users.FirstOrDefault(u => u.Email == email));
         }
 
         public Task<User> GetByUserNameAsync(string userName)
@@ -26,7 +26,7 @@ namespace JWTAuthServer.Services.UserRepository
 
         public Task<User> GetUserByIdAsync(Guid userId)
         {
-             return Task.FromResult(_users.FirstOrDefault(u => u.Id == userId));
+            return Task.FromResult(_users.FirstOrDefault(u => u.Id == userId));
         }
     }
 }

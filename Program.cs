@@ -1,4 +1,5 @@
 using JWTAuthServer.Configuration;
+using JWTAuthServer.Models;
 using JWTAuthServer.Models.AuthDbContext;
 using JWTAuthServer.Services.Authenticators;
 using JWTAuthServer.Services.HashHelper;
@@ -18,12 +19,24 @@ builder.Configuration.Bind("JwtAuthentication", authenticationConfiguration);
 
 //SecretClient keyVaultClient = new SecretClient(new Uri(authenticationConfiguration.KeyVaultUrl), new DefaultAzureCredential());
 // Add services to the container.
+//builder.Services.AddIdentityCore<User>().AddEntityFrameworkStores<AuthenticationDbContext>();
 
 string sqlConnectionString = builder.Configuration.GetConnectionString("sqlite");
 builder.Services.AddDbContext<AuthenticationDbContext>(options =>
 {
     options.UseSqlite(sqlConnectionString);
 });
+builder.Services.AddIdentityCore<User>(options =>
+{
+    options.User.RequireUniqueEmail = true;
+
+    options.Password.RequireDigit = false;
+    options.Password.RequireLowercase = false;
+    options.Password.RequireNonAlphanumeric = false;
+    options.Password.RequireUppercase = false;
+    options.Password.RequiredLength = 1;
+
+}).AddEntityFrameworkStores<AuthenticationDbContext>();
 builder.Services.AddControllers();
 builder.Services.AddSingleton(authenticationConfiguration);
 builder.Services.AddSingleton<IPasswordHasher, BCryptPasswordHasher>();

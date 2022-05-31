@@ -1,11 +1,10 @@
 using JWTAuthServer.Models;
 using JWTAuthServer.Models.Response;
 using JWTAuthServer.Services.Authenticators;
-using JWTAuthServer.Services.HashHelper;
 using JWTAuthServer.Services.RefreshTokenRepository;
 using JWTAuthServer.Services.TokenValidator;
-using JWTAuthServer.Services.UserRepository;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using System.Security.Claims;
@@ -14,25 +13,26 @@ namespace JWTAuthServer.Controllers
 {
     public class AuthenticationController : Controller
     {
-        private readonly IUserRepository _userRepository;
+        private readonly UserManager<User> _userRepository;
+        private readonly IPasswordHasher<User> _passwordHasher;
+        //private readonly IUserRepository _userRepository;
         private readonly IRefreshTokenRepository _refreshTokenRepository;
         private readonly Authenticator _authenticator;
-        private readonly IPasswordHasher _passwordHasher;
+        //private readonly IPasswordHasher _passwordHasher;
         private readonly RefreshTokenValidator _refreshTokenValidator;
 
         public AuthenticationController(
-            IUserRepository userRepository,
             IRefreshTokenRepository refreshTokenRepository,
-            IPasswordHasher passwordHasher,
             RefreshTokenValidator refreshTokenValidator,
-            Authenticator authenticator
-        )
+            Authenticator authenticator, UserManager<User> userManager, IPasswordHasher<User> passwordHasher)
         {
-            _userRepository = userRepository;
-            _passwordHasher = passwordHasher;
+            //_userRepository = userRepository;
+            //_passwordHasher = passwordHasher;
             _refreshTokenRepository = refreshTokenRepository;
             _refreshTokenValidator = refreshTokenValidator;
             _authenticator = authenticator;
+            _userRepository = userManager;
+            _passwordHasher = passwordHasher;
         }
 
         [HttpPost("login")]
@@ -41,11 +41,12 @@ namespace JWTAuthServer.Controllers
             if (!ModelState.IsValid)
                 return ValidateModelState(ModelState);
 
-            var user = await _userRepository.GetByUserNameAsync(message.UserName);
+            var user = await _userRepository.FindByNameAsync(message.UserName);
             if (user == null)
                 return BadRequest(new { message = "Username or password is incorrect" });
 
-            if (!_passwordHasher.VerifyPassword(message.Password, user.PasswordHash))
+            bool isCorrectPassword = await _userRepository.CheckPasswordAsync(user, message.Password);
+            if (!isCorrectPassword)
                 return BadRequest(new { message = "Username or password is incorrect" });
 
             var authResponse = await _authenticator.Authenticate(user);
@@ -64,23 +65,31 @@ namespace JWTAuthServer.Controllers
             if (message.Password != message.ConfirmPassword)
                 return BadRequest(new ErrorResponse("Passwords do not match"));
 
-            var userByEmail = await _userRepository.GetByEmailAsync(message.EmailAddress);
+            var userByEmail = await _userRepository.FindByEmailAsync(message.EmailAddress);
             if (userByEmail != null)
                 return BadRequest(new ErrorResponse("Email address is already in use"));
 
-            string passHash = _passwordHasher.HashPassword(message.Password);
             var userToRegister = new User
             {
-                EmailAddress = message.EmailAddress,
-                UserName = message.UserName,
-                PasswordHash = passHash
+                Email = message.EmailAddress,
+                UserName = message.UserName
+                ,
+                PasswordHash = ""
             };
 
-            var registeredUser = await _userRepository.CreateUserAsync(userToRegister);
-            if (registeredUser == null)
+            var identityResult = await _userRepository.CreateAsync(userToRegister, userToRegister.PasswordHash);
+            if (!identityResult.Succeeded)
+            {
+                IdentityErrorDescriber errorDescriber = new IdentityErrorDescriber();
+                var primaryError = identityResult.Errors.FirstOrDefault();
+                if (primaryError.Code == nameof(errorDescriber.DuplicateEmail))
+                    return BadRequest(new ErrorResponse("Email address is already in use"));
+
+            }
+            if (identityResult == null)
                 return BadRequest(new ErrorResponse("Failed to register user"));
 
-            return Ok(registeredUser);
+            return Ok(identityResult);
         }
 
         [HttpPost("refresh")]
@@ -99,15 +108,13 @@ namespace JWTAuthServer.Controllers
             if (refreshToken == null)
                 return NotFound(new ErrorResponse("Token not found"));
 
-
             await _refreshTokenRepository.DeleteRefreshTokenAsync(refreshToken.Id);
 
-            User? user = await _userRepository.GetUserByIdAsync(refreshToken.UserId);
+            User? user = await _userRepository.FindByIdAsync(refreshToken.UserId.ToString());
             if (refreshToken == null)
                 return NotFound(new ErrorResponse("User not found"));
 
             var authResponse = await _authenticator.Authenticate(user);
-
             if (authResponse == null)
                 return BadRequest(new { message = "Username or password is incorrect" });
 

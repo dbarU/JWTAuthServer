@@ -19,7 +19,7 @@ namespace JWTAuthServer.Services.TokenGenerator
             {
                 new Claim("id", user.Id.ToString()),
                 new Claim(ClaimTypes.Name, user.UserName),
-                new Claim(ClaimTypes.Email, user.EmailAddress)
+                new Claim(ClaimTypes.Email, user.Email)
             };
 
             return JwtTokenGenerator.GenerateToken(
